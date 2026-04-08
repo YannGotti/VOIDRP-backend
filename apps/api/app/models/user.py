@@ -10,6 +10,7 @@ from apps.api.app.models.base import Base, TimestampMixin, UuidPrimaryKeyMixin
 if TYPE_CHECKING:
     from apps.api.app.models.email_token import EmailToken
     from apps.api.app.models.player_account import PlayerAccount
+    from apps.api.app.models.play_ticket import PlayTicket
     from apps.api.app.models.refresh_session import RefreshSession
 
 
@@ -32,5 +33,8 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     email_tokens: Mapped[list["EmailToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    play_tickets: Mapped[list["PlayTicket"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

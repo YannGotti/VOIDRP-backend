@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
     email_token_expire_hours: int = 24
 
+    play_ticket_expire_minutes: int = Field(default=10, ge=5, le=10)
+    game_auth_shared_secret: str = Field(default="CHANGE_ME_TO_STRONG_GAME_AUTH_SECRET", min_length=16)
+
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
     email_from: str = "noreply@void-rp.ru"

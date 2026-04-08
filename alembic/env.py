@@ -11,6 +11,7 @@ from apps.api.app.models.email_token import EmailToken
 from apps.api.app.models.player_account import PlayerAccount
 from apps.api.app.models.refresh_session import RefreshSession
 from apps.api.app.models.user import User
+from apps.api.app.models.play_ticket import PlayTicket
 
 config = context.config
 
