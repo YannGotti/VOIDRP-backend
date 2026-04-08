@@ -1,0 +1,5 @@
+.env
+dump.py
+file_tree.txt
+.venv/
+__pycache__
