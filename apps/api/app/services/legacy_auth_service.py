@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 from dataclasses import dataclass
@@ -11,7 +12,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from apps.api.app.core.security import verify_password
 from apps.api.app.models.player_account import PlayerAccount
-from apps.api.app.models.user import User
 from apps.api.app.utils.normalization import normalize_minecraft_nickname
 
 
@@ -87,6 +87,16 @@ class LegacyAuthService:
         if not legacy_hash:
             return False
 
+        if legacy_hash.startswith("pbkdf2$") or legacy_algo in {
+            "pbkdf2",
+            "custom_pbkdf2",
+            "custom_pbkdf2_sha256",
+            "legacy_pbkdf2",
+            "pbkdf2_hmac_sha256",
+            "pbkdf2withhmacsha256",
+        }:
+            return self._verify_custom_pbkdf2_sha256_hash(legacy_hash, password)
+
         if legacy_algo in {"sha256_hex", "sha256"}:
             candidate = hashlib.sha256(password.encode("utf-8")).hexdigest()
             return hmac.compare_digest(candidate, legacy_hash)
@@ -101,3 +111,32 @@ class LegacyAuthService:
             return self._crypt_context.verify(password, legacy_hash)
         except Exception:
             return False
+
+    def _verify_custom_pbkdf2_sha256_hash(self, legacy_hash: str, password: str) -> bool:
+        try:
+            prefix, iterations_raw, salt_b64, dk_b64 = legacy_hash.split("$", 3)
+
+            if prefix.strip().lower() != "pbkdf2":
+                return False
+
+            iterations = int(iterations_raw)
+            salt = base64.b64decode(salt_b64)
+            expected_dk = base64.b64decode(dk_b64)
+
+            if len(salt) != 16:
+                return False
+
+            if len(expected_dk) != 32:
+                return False
+        except Exception:
+            return False
+
+        derived = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            iterations,
+            dklen=32,
+        )
+
+        return hmac.compare_digest(derived, expected_dk)

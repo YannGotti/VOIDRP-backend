@@ -16,3 +16,18 @@ class LegacyLoginResponse(BaseModel):
     minecraft_nickname: str
     legacy_auth_enabled: bool
     email_verified: bool
+
+from pydantic import BaseModel
+
+
+class PlayerAccessRequest(BaseModel):
+    player_name: str
+
+
+class PlayerAccessResponse(BaseModel):
+    player_exists: bool
+    user_active: bool
+    legacy_auth_enabled: bool
+    must_use_launcher: bool
+    minecraft_nickname: str | None = None
+    error: str | None = None
