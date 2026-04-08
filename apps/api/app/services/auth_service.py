@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from apps.api.app.config import get_settings
 from apps.api.app.core.security import (
@@ -115,14 +116,7 @@ class AuthService:
 
     def login(self, *, login: str, password: str, device_name: str) -> LoginResult:
         normalized_login = normalize_email(login)
-        user = self.session.execute(
-            select(User)
-            .options(joinedload(User.player_account))
-            .where(
-                (User.site_login_normalized == normalized_login)
-                | (User.email_normalized == normalized_login)
-            )
-        ).unique().scalar_one_or_none()
+        user = self.user_repository.get_by_login_or_email_normalized_with_player_account(normalized_login)
 
         if user is None or not verify_password(password, user.password_hash):
             raise AuthenticationError("invalid credentials")
@@ -147,9 +141,9 @@ class AuthService:
         if refresh_session.expires_at <= utc_now():
             raise AuthenticationError("refresh token is expired")
 
-        user = self.session.execute(
-            select(User).options(joinedload(User.player_account)).where(User.id == refresh_session.user_id)
-        ).unique().scalar_one()
+        user = self.user_repository.get_by_id_with_player_account(refresh_session.user_id)
+        if user is None:
+            raise AuthenticationError("user is not available")
 
         refresh_session.revoked_at = utc_now()
         refresh_session.last_used_at = utc_now()
@@ -290,7 +284,7 @@ class AuthService:
         )
         return email_token
 
-    def _consume_outstanding_email_tokens(self, user_id, purpose: EmailTokenPurpose) -> None:
+    def _consume_outstanding_email_tokens(self, user_id: UUID, purpose: EmailTokenPurpose) -> None:
         outstanding_tokens = self.session.execute(
             select(EmailToken).where(
                 EmailToken.user_id == user_id,

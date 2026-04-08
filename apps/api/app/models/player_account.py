@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 class PlayerAccount(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "player_accounts"
 
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     minecraft_nickname: Mapped[str] = mapped_column(String(16), nullable=False)
     minecraft_nickname_normalized: Mapped[str] = mapped_column(
         String(16), nullable=False, unique=True, index=True
