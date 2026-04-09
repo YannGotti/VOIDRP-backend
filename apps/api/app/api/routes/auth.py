@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from typing import Annotated
+from html import escape
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from apps.api.app.config import get_settings
 from apps.api.app.db import get_db_session
 from apps.api.app.schemas.auth import (
     EmailActionResponse,
@@ -26,15 +29,22 @@ from apps.api.app.services.auth_service import (
     ConflictError,
     TokenValidationError,
 )
-from apps.api.app.services.email_service import LoggingEmailService
+from apps.api.app.services.email_service import LoggingEmailService, ResendEmailService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def get_email_service():
+    settings = get_settings()
+    if settings.email_backend == "resend":
+        return ResendEmailService(settings=settings)
+    return LoggingEmailService()
 
 
 def get_auth_service(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> AuthService:
-    return AuthService(session=session, email_service=LoggingEmailService())
+    return AuthService(session=session, email_service=get_email_service())
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -128,6 +138,57 @@ def verify_email(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return EmailActionResponse(message="Email successfully verified.")
+
+
+def _render_email_confirmation_page(*, success: bool, title: str, message: str, website_url: str) -> HTMLResponse:
+    accent = "#3ba55d" if success else "#e5534b"
+    safe_title = escape(title)
+    safe_message = escape(message)
+    safe_website_url = escape(website_url, quote=True)
+
+    html = f"""<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{safe_title}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0f1115;font-family:Arial,Helvetica,sans-serif;color:#e8ecf1;">
+    <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+      <div style="background:#171b22;border:1px solid #2b3442;border-radius:16px;padding:32px;">
+        <div style="font-size:28px;font-weight:700;margin-bottom:12px;color:{accent};">{safe_title}</div>
+        <div style="font-size:16px;line-height:1.6;color:#c7d0db;margin-bottom:24px;">{safe_message}</div>
+        <a href="{safe_website_url}" style="display:inline-block;padding:14px 22px;border-radius:12px;background:#5865f2;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">Перейти на сайт</a>
+      </div>
+    </div>
+  </body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+@router.get("/verify-email/confirm", response_class=HTMLResponse)
+def verify_email_confirm(
+    token: str = Query(min_length=16, max_length=512),
+    auth_service: Annotated[AuthService, Depends(get_auth_service)] = None,
+):
+    settings = get_settings()
+
+    try:
+        auth_service.verify_email(raw_token=token)
+    except TokenValidationError as exc:
+        return _render_email_confirmation_page(
+            success=False,
+            title="Подтверждение не выполнено",
+            message=f"Не удалось подтвердить почту: {exc}",
+            website_url=settings.website_base_url,
+        )
+
+    return _render_email_confirmation_page(
+        success=True,
+        title="Почта подтверждена",
+        message="Адрес электронной почты успешно подтверждён. Теперь можно вернуться на сайт VoidRP.",
+        website_url=settings.website_base_url,
+    )
 
 
 @router.post("/resend-verification", response_model=EmailActionResponse)

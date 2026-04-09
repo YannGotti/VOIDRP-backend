@@ -29,8 +29,11 @@ class Settings(BaseSettings):
 
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
-    email_from: str = "noreply@void-rp.ru"
-    email_backend: Literal["logging"] = "logging"
+    email_from: str = "VoidRP <noreply@mail.void-rp.ru>"
+    email_backend: Literal["logging", "resend"] = "logging"
+    resend_api_key: str | None = None
+    public_api_base_url: str = "https://api.void-rp.ru"
+    website_base_url: str = "https://void-rp.ru"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -40,6 +43,11 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
+
+    @field_validator("public_api_base_url", "website_base_url", mode="before")
+    @classmethod
+    def strip_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/") if isinstance(value, str) else value
 
     @property
     def is_dev(self) -> bool:

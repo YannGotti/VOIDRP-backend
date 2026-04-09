@@ -21,7 +21,11 @@ from apps.api.app.models.player_account import PlayerAccount
 from apps.api.app.models.refresh_session import RefreshSession
 from apps.api.app.models.user import User
 from apps.api.app.repositories.user_repository import UserRepository
-from apps.api.app.services.email_service import EmailMessage, EmailService
+from apps.api.app.services.email_service import (
+    EmailMessage,
+    EmailService,
+    build_email_layout,
+)
 from apps.api.app.utils.normalization import (
     normalize_email,
     normalize_minecraft_nickname,
@@ -261,18 +265,41 @@ class AuthService:
         self.session.flush()
 
         if purpose == EmailTokenPurpose.VERIFY_EMAIL:
+            confirm_url = (
+                f"{self.settings.public_api_base_url}{self.settings.api_v1_prefix}"
+                f"/auth/verify-email/confirm?token={raw_token}"
+            )
             subject = "VoidRP: подтверждение почты"
             body = (
                 "Добро пожаловать в VoidRP.\n\n"
-                "На этом этапе сервис пока использует logging email backend.\n"
-                f"Ваш verification token: {raw_token}\n"
+                "Для завершения регистрации подтвердите адрес электронной почты:\n"
+                f"{confirm_url}\n\n"
+                f"Ссылка действует {self.settings.email_token_expire_hours} ч.\n"
+                "Если это были не вы, просто проигнорируйте письмо.\n"
+            )
+            html = build_email_layout(
+                title="Подтвердите почту",
+                intro="Нажмите на кнопку ниже, чтобы подтвердить адрес электронной почты для аккаунта VoidRP.",
+                action_url=confirm_url,
+                action_text="Подтвердить почту",
+                footer="Если вы не регистрировались в VoidRP, просто проигнорируйте это письмо.",
             )
         else:
+            reset_url = f"{self.settings.website_base_url}/reset-password?token={raw_token}"
             subject = "VoidRP: сброс пароля"
             body = (
                 "Вы запросили сброс пароля аккаунта VoidRP.\n\n"
-                "На этом этапе сервис пока использует logging email backend.\n"
-                f"Ваш reset token: {raw_token}\n"
+                "Откройте страницу сброса пароля:\n"
+                f"{reset_url}\n\n"
+                f"Ссылка действует {self.settings.email_token_expire_hours} ч.\n"
+                "Если это были не вы, просто проигнорируйте письмо.\n"
+            )
+            html = build_email_layout(
+                title="Сброс пароля",
+                intro="Нажмите на кнопку ниже, чтобы перейти к установке нового пароля для аккаунта VoidRP.",
+                action_url=reset_url,
+                action_text="Сбросить пароль",
+                footer="Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.",
             )
 
         self.email_service.send(
@@ -280,6 +307,7 @@ class AuthService:
                 to_email=user.email,
                 subject=subject,
                 body=body,
+                html=html,
             )
         )
         return email_token
