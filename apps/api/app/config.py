@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     play_ticket_expire_minutes: int = Field(default=10, ge=5, le=10)
     game_auth_shared_secret: str = Field(default="CHANGE_ME_TO_STRONG_GAME_AUTH_SECRET", min_length=16)
+    admin_api_secret: str = Field(default="CHANGE_ME_TO_STRONG_ADMIN_SECRET", min_length=16)
 
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
