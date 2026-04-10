@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
+from pydantic import BaseModel, Field
+
 from apps.api.app.schemas.common import ORMModel
 
 
@@ -22,6 +24,23 @@ class UserRead(ORMModel):
     created_at: datetime
 
 
+class AccountSecurityRead(ORMModel):
+    active_refresh_sessions: int
+    must_use_launcher: bool
+    legacy_hash_present: bool
+    legacy_ready: bool
+
+
 class MeResponse(ORMModel):
     user: UserRead
     player_account: PlayerAccountRead
+    security: AccountSecurityRead
+
+
+class RevokeOtherSessionsRequest(BaseModel):
+    refresh_token: str = Field(min_length=32, max_length=512)
+
+
+class RevokeSessionsResponse(ORMModel):
+    message: str
+    revoked_sessions: int
