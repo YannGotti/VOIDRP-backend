@@ -45,11 +45,16 @@ class PublicProfileService:
         context = self._get_or_create_context_for_user(current_user)
         return self._build_read(context=context, viewer=current_user)
 
-    def update_me(self, current_user: User, payload: UpdatePublicProfileRequest) -> PublicProfileRead:
+    def update_me(
+        self,
+        current_user: User,
+        payload: UpdatePublicProfileRequest,
+    ) -> PublicProfileRead:
         context = self._get_or_create_context_for_user(current_user)
         profile = context.profile
+        fields_set = getattr(payload, "model_fields_set", set())
 
-        if payload.slug is not None and payload.slug != profile.slug:
+        if "slug" in fields_set and payload.slug is not None and payload.slug != profile.slug:
             existing = self.session.execute(
                 select(PlayerPublicProfile).where(PlayerPublicProfile.slug == payload.slug)
             ).scalar_one_or_none()
@@ -57,25 +62,39 @@ class PublicProfileService:
                 raise PublicProfileConflictError("slug is already taken")
             profile.slug = payload.slug
 
-        if payload.display_name is not None:
+        if "display_name" in fields_set:
             profile.display_name = payload.display_name
-        if payload.bio is not None:
+
+        if "bio" in fields_set:
             profile.bio = payload.bio
-        if payload.status_text is not None:
+
+        if "status_text" in fields_set:
             profile.status_text = payload.status_text
-        if payload.theme_mode is not None:
+
+        if "theme_mode" in fields_set and payload.theme_mode is not None:
             profile.theme_mode = payload.theme_mode
-        if payload.accent_color is not None or payload.accent_color == None:
+
+        if "accent_color" in fields_set:
             profile.accent_color = payload.accent_color
-        if payload.is_public is not None:
+
+        if "is_public" in fields_set and payload.is_public is not None:
             profile.is_public = payload.is_public
-        if payload.allow_followers_list_public is not None:
+
+        if (
+            "allow_followers_list_public" in fields_set
+            and payload.allow_followers_list_public is not None
+        ):
             profile.allow_followers_list_public = payload.allow_followers_list_public
-        if payload.allow_friends_list_public is not None:
+
+        if (
+            "allow_friends_list_public" in fields_set
+            and payload.allow_friends_list_public is not None
+        ):
             profile.allow_friends_list_public = payload.allow_friends_list_public
 
         self.session.commit()
         self.session.refresh(profile)
+
         return self._build_read(context=context, viewer=current_user)
 
     def get_by_slug(self, slug: str, viewer: User | None = None) -> PublicProfileRead:
@@ -140,6 +159,7 @@ class PublicProfileService:
     def _build_read(self, *, context: PublicProfileContext, viewer: User | None) -> PublicProfileRead:
         user = context.user
         profile = context.profile
+
         if user.player_account is None:
             raise PublicProfileNotFoundError("player account is missing")
 
@@ -240,16 +260,21 @@ class PublicProfileService:
         def _read_urls(asset) -> tuple[str | None, str | None]:
             if asset is None:
                 return None, None
+
             variants = asset.variants_json or {}
             full_url = None
             preview_url = None
+
             if isinstance(variants, dict):
                 full_item = variants.get("full")
                 preview_item = variants.get("preview")
+
                 if isinstance(full_item, dict):
                     full_url = full_item.get("url")
+
                 if isinstance(preview_item, dict):
                     preview_url = preview_item.get("url")
+
             return full_url, preview_url
 
         avatar_url, avatar_preview_url = _read_urls(profile.avatar_asset)
@@ -289,4 +314,5 @@ class PublicProfileService:
         ).scalar_one_or_none() is not None:
             suffix += 1
             candidate = f"{base}-{suffix}"[:64]
+
         return candidate
