@@ -11,6 +11,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     password_repeat: str = Field(min_length=8, max_length=128)
+    referral_code: str | None = Field(default=None, min_length=3, max_length=32)
 
     @field_validator("site_login")
     @classmethod
@@ -21,6 +22,14 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_minecraft_nickname(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("referral_code")
+    @classmethod
+    def validate_referral_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
     @field_validator("password_repeat")
     @classmethod

@@ -24,8 +24,14 @@ class Settings(BaseSettings):
     email_token_expire_hours: int = 24
 
     play_ticket_expire_minutes: int = Field(default=10, ge=5, le=10)
-    game_auth_shared_secret: str = Field(default="CHANGE_ME_TO_STRONG_GAME_AUTH_SECRET", min_length=16)
-    admin_api_secret: str = Field(default="CHANGE_ME_TO_STRONG_ADMIN_SECRET", min_length=16)
+    game_auth_shared_secret: str = Field(
+        default="CHANGE_ME_TO_STRONG_GAME_AUTH_SECRET",
+        min_length=16,
+    )
+    admin_api_secret: str = Field(
+        default="CHANGE_ME_TO_STRONG_ADMIN_SECRET",
+        min_length=16,
+    )
 
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
@@ -35,7 +41,37 @@ class Settings(BaseSettings):
     public_api_base_url: str = "https://api.void-rp.ru"
     website_base_url: str = "https://void-rp.ru"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Для локальной разработки безопасный путь внутри проекта.
+    # На production можно переопределить через .env:
+    # MEDIA_STORAGE_ROOT=/var/lib/voidrp-media
+    media_storage_root: str = "./media"
+    media_public_mount_path: str = "/media"
+    media_public_base_url: str = "https://api.void-rp.ru/media"
+
+    profile_avatar_max_bytes: int = 512 * 1024
+    profile_banner_max_bytes: int = 2 * 1024 * 1024
+    profile_background_max_bytes: int = 3 * 1024 * 1024
+
+    profile_avatar_min_width: int = 256
+    profile_avatar_min_height: int = 256
+    profile_avatar_max_width: int = 2048
+    profile_avatar_max_height: int = 2048
+
+    profile_banner_min_width: int = 1280
+    profile_banner_min_height: int = 720
+    profile_banner_max_width: int = 3840
+    profile_banner_max_height: int = 2160
+
+    profile_background_min_width: int = 1600
+    profile_background_min_height: int = 900
+    profile_background_max_width: int = 4096
+    profile_background_max_height: int = 4096
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
@@ -44,7 +80,13 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
-    @field_validator("public_api_base_url", "website_base_url", mode="before")
+    @field_validator(
+        "public_api_base_url",
+        "website_base_url",
+        "media_public_base_url",
+        "media_public_mount_path",
+        mode="before",
+    )
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/") if isinstance(value, str) else value

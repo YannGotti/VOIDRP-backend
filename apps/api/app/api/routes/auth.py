@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Annotated
 from html import escape
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
@@ -58,6 +58,7 @@ def register(
             minecraft_nickname=payload.minecraft_nickname,
             email=payload.email,
             password=payload.password,
+            referral_code=payload.referral_code,
         )
     except ConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -137,14 +138,22 @@ def verify_email(
     except TokenValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return EmailActionResponse(message="Email successfully verified.")
+    return EmailActionResponse(message="Email has been verified successfully.")
 
 
-def _render_email_confirmation_page(*, success: bool, title: str, message: str, website_url: str) -> HTMLResponse:
-    accent = "#3ba55d" if success else "#e5534b"
+def _render_email_confirmation_page(
+    *,
+    success: bool,
+    title: str,
+    message: str,
+    website_url: str,
+) -> HTMLResponse:
     safe_title = escape(title)
     safe_message = escape(message)
-    safe_website_url = escape(website_url, quote=True)
+    safe_website_url = escape(website_url)
+
+    banner_color = "#16a34a" if success else "#dc2626"
+    banner_title = "Успешно" if success else "Ошибка"
 
     html = f"""<!doctype html>
 <html lang="ru">
@@ -154,11 +163,22 @@ def _render_email_confirmation_page(*, success: bool, title: str, message: str, 
     <title>{safe_title}</title>
   </head>
   <body style="margin:0;padding:0;background:#0f1115;font-family:Arial,Helvetica,sans-serif;color:#e8ecf1;">
-    <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
-      <div style="background:#171b22;border:1px solid #2b3442;border-radius:16px;padding:32px;">
-        <div style="font-size:28px;font-weight:700;margin-bottom:12px;color:{accent};">{safe_title}</div>
-        <div style="font-size:16px;line-height:1.6;color:#c7d0db;margin-bottom:24px;">{safe_message}</div>
-        <a href="{safe_website_url}" style="display:inline-block;padding:14px 22px;border-radius:12px;background:#5865f2;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">Перейти на сайт</a>
+    <div style="max-width:720px;margin:0 auto;padding:32px 16px;">
+      <div style="background:#171b22;border:1px solid #2b3442;border-radius:20px;overflow:hidden;">
+        <div style="padding:16px 24px;background:{banner_color};font-size:14px;font-weight:700;">
+          {banner_title}
+        </div>
+        <div style="padding:32px;">
+          <div style="font-size:28px;font-weight:700;line-height:1.2;margin-bottom:12px;color:#ffffff;">
+            {safe_title}
+          </div>
+          <div style="font-size:16px;line-height:1.7;color:#c7d0db;margin-bottom:24px;">
+            {safe_message}
+          </div>
+          <a href="{safe_website_url}" style="display:inline-block;padding:14px 22px;border-radius:12px;background:#5865f2;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">
+            Перейти на сайт
+          </a>
+        </div>
       </div>
     </div>
   </body>

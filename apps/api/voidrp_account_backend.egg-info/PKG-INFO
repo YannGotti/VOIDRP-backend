@@ -16,6 +16,7 @@ Requires-Dist: passlib>=1.7.4
 Requires-Dist: email-validator>=2.0.0
 Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: Pillow>=10.4.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0.0; extra == "dev"
 Requires-Dist: httpx>=0.28.0; extra == "dev"

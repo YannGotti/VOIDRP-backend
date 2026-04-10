@@ -13,6 +13,7 @@ from apps.api.app.db import get_db_session
 from apps.api.app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=True)
+optional_bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
@@ -28,15 +29,43 @@ def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid access token payload",
             )
+
         user = session.get(User, UUID(user_id))
         if user is None or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User is not available",
             )
+
         return user
     except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired access token",
         ) from exc
+
+
+def get_optional_current_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(optional_bearer_scheme),
+    ],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> User | None:
+    if credentials is None:
+        return None
+
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+
+        user = session.get(User, UUID(user_id))
+        if user is None or not user.is_active:
+            return None
+
+        return user
+    except jwt.PyJWTError:
+        return None
