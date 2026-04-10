@@ -33,7 +33,21 @@ class Settings(BaseSettings):
         min_length=16,
     )
 
-    cors_allow_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_allow_origins: list[str] = Field(
+        default_factory=lambda: [
+            "https://void-rp.ru",
+            "https://www.void-rp.ru",
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:5175",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5174",
+            "http://127.0.0.1:5175",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
+        ]
+    )
+    cors_allow_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     email_from: str = "VoidRP <noreply@mail.void-rp.ru>"
     email_backend: Literal["logging", "resend"] = "logging"
@@ -41,9 +55,6 @@ class Settings(BaseSettings):
     public_api_base_url: str = "https://api.void-rp.ru"
     website_base_url: str = "https://void-rp.ru"
 
-    # Для локальной разработки безопасный путь внутри проекта.
-    # На production можно переопределить через .env:
-    # MEDIA_STORAGE_ROOT=/var/lib/voidrp-media
     media_storage_root: str = "./media"
     media_public_mount_path: str = "/media"
     media_public_base_url: str = "https://api.void-rp.ru/media"
