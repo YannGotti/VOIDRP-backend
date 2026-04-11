@@ -51,7 +51,7 @@ class NationMediaService:
         preview_image = self._prepare_variant(image, rules["preview_size"])
         full_image.save(full_path, format="WEBP", quality=90, method=6)
         preview_image.save(preview_path, format="WEBP", quality=86, method=6)
-        nation_prefix = f"{self.settings.media_public_mount_path}/nations/{nation.id}"
+        nation_prefix = f"{self.settings.media_public_base_url}/nations/{nation.id}"
         if slot == "icon":
             nation.icon_url = f"{nation_prefix}/{full_name}"
             nation.icon_preview_url = f"{nation_prefix}/{preview_name}"
