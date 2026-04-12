@@ -57,3 +57,19 @@ class GameNationSummaryResponse(BaseModel):
     members_count: int
     officers_count: int
     updated_at: datetime
+
+
+class GameNationSyncItemRead(BaseModel):
+    nation_id: UUID
+    nation_slug: str
+    title: str
+    tag: str
+    leader_minecraft_nickname: str | None = None
+    officers: list[str]
+    members: list[str]
+    updated_at: datetime
+
+
+class GameNationListResponse(BaseModel):
+    total: int
+    items: list[GameNationSyncItemRead]

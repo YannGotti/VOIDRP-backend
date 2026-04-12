@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -10,6 +11,7 @@ from apps.api.app.models.nation_join_request import NationJoinRequest
 from apps.api.app.models.nation_member import NationMember
 from apps.api.app.models.user import User
 from apps.api.app.schemas.nation import (
+    NationActionResponse,
     NationAssetsRead,
     NationCreateRequest,
     NationJoinActionResponse,
@@ -17,8 +19,10 @@ from apps.api.app.schemas.nation import (
     NationJoinRequestRead,
     NationListResponse,
     NationMemberRead,
+    NationMemberRoleUpdateRequest,
     NationRead,
     NationStatsRead,
+    NationTransferLeadershipRequest,
     NationUpdateRequest,
 )
 
@@ -181,6 +185,98 @@ class NationService:
         self.session.commit()
         return self.get_by_slug(slug, viewer=current_user)
 
+    def update_member_role(
+        self,
+        *,
+        current_user: User,
+        slug: str,
+        target_user_id: UUID,
+        payload: NationMemberRoleUpdateRequest,
+    ) -> NationActionResponse:
+        nation = self._require_manageable_nation(current_user, slug=slug)
+        actor_membership = self._get_membership(nation.id, current_user.id)
+        target_membership = self._get_membership(nation.id, target_user_id)
+
+        if target_membership is None:
+            raise NationNotFoundError("nation member was not found")
+
+        if target_membership.role == "leader":
+            raise NationValidationError("leader role cannot be changed here")
+
+        if actor_membership is None:
+            raise NationPermissionError("not enough permissions to manage nation")
+
+        if actor_membership.role == "officer" and target_membership.role == "officer":
+            raise NationPermissionError("officer cannot change another officer role")
+
+        target_membership.role = payload.role
+        self.session.commit()
+
+        return NationActionResponse(
+            message="Member role updated successfully.",
+            nation=self.get_by_slug(slug, viewer=current_user),
+        )
+
+    def remove_member(
+        self,
+        *,
+        current_user: User,
+        slug: str,
+        target_user_id: UUID,
+    ) -> NationActionResponse:
+        nation = self._require_manageable_nation(current_user, slug=slug)
+        actor_membership = self._get_membership(nation.id, current_user.id)
+        target_membership = self._get_membership(nation.id, target_user_id)
+
+        if target_membership is None:
+            raise NationNotFoundError("nation member was not found")
+
+        if target_membership.role == "leader":
+            raise NationValidationError("leader cannot be removed from nation")
+
+        if actor_membership is None:
+            raise NationPermissionError("not enough permissions to manage nation")
+
+        if actor_membership.role == "officer" and target_membership.role == "officer":
+            raise NationPermissionError("officer cannot remove another officer")
+
+        self.session.delete(target_membership)
+        self.session.commit()
+
+        return NationActionResponse(
+            message="Member removed successfully.",
+            nation=self.get_by_slug(slug, viewer=current_user),
+        )
+
+    def transfer_leadership(
+        self,
+        *,
+        current_user: User,
+        slug: str,
+        payload: NationTransferLeadershipRequest,
+    ) -> NationActionResponse:
+        nation = self._require_manageable_nation(current_user, slug=slug)
+        actor_membership = self._get_membership(nation.id, current_user.id)
+        if actor_membership is None or actor_membership.role != "leader":
+            raise NationPermissionError("only leader can transfer leadership")
+
+        target_membership = self._get_membership(nation.id, payload.target_user_id)
+        if target_membership is None:
+            raise NationNotFoundError("nation member was not found")
+        if target_membership.user_id == current_user.id:
+            raise NationValidationError("leadership is already assigned to this user")
+
+        actor_membership.role = "officer"
+        target_membership.role = "leader"
+        nation.leader_user_id = target_membership.user_id
+
+        self.session.commit()
+
+        return NationActionResponse(
+            message="Leadership transferred successfully.",
+            nation=self.get_by_slug(slug, viewer=current_user),
+        )
+
     def _slug_exists(self, slug: str) -> bool:
         return self.session.execute(select(Nation).where(Nation.slug == slug)).scalar_one_or_none() is not None
 
@@ -240,58 +336,94 @@ class NationService:
         return membership is not None and membership.role in {"leader", "officer"}
 
     def _build_read(self, nation: Nation, viewer: User | None = None) -> NationRead:
-        viewer_membership = next((item for item in nation.members if viewer is not None and item.user_id == viewer.id), None)
-        viewer_request = next((item for item in nation.join_requests if viewer is not None and item.user_id == viewer.id and item.status == "pending"), None)
-        members = [
-            NationMemberRead(
+    viewer_membership = next(
+        (item for item in nation.members if viewer is not None and item.user_id == viewer.id),
+        None,
+    )
+    viewer_request = next(
+        (
+            item
+            for item in nation.join_requests
+            if viewer is not None and item.user_id == viewer.id and item.status == "pending"
+        ),
+        None,
+    )
+
+    members = [
+        NationMemberRead(
+            user_id=item.user_id,
+            site_login=item.user.site_login if item.user else "unknown",
+            minecraft_nickname=item.user.player_account.minecraft_nickname
+            if item.user and item.user.player_account
+            else None,
+            role=item.role,
+            created_at=item.created_at,
+        )
+        for item in sorted(
+            nation.members,
+            key=lambda x: (x.role != "leader", x.role != "officer", x.created_at),
+        )
+    ]
+
+    join_requests = []
+    if viewer_membership is not None and viewer_membership.role in {"leader", "officer"}:
+        join_requests = [
+            NationJoinRequestRead(
+                id=item.id,
                 user_id=item.user_id,
                 site_login=item.user.site_login if item.user else "unknown",
-                minecraft_nickname=item.user.player_account.minecraft_nickname if item.user and item.user.player_account else None,
-                role=item.role,
+                minecraft_nickname=item.user.player_account.minecraft_nickname
+                if item.user and item.user.player_account
+                else None,
+                message=item.message,
+                status=item.status,
                 created_at=item.created_at,
             )
-            for item in sorted(nation.members, key=lambda x: (x.role != "leader", x.created_at))
+            for item in nation.join_requests
+            if item.status == "pending"
         ]
-        join_requests = []
-        if viewer_membership is not None and viewer_membership.role in {"leader", "officer"}:
-            join_requests = [
-                NationJoinRequestRead(
-                    id=item.id,
-                    user_id=item.user_id,
-                    site_login=item.user.site_login if item.user else "unknown",
-                    minecraft_nickname=item.user.player_account.minecraft_nickname if item.user and item.user.player_account else None,
-                    message=item.message,
-                    status=item.status,
-                    created_at=item.created_at,
-                )
-                for item in nation.join_requests if item.status == "pending"
-            ]
-        return NationRead(
-            id=nation.id,
-            slug=nation.slug,
-            title=nation.title,
-            tag=nation.tag,
-            short_description=nation.short_description,
-            description=nation.description,
-            accent_color=nation.accent_color,
-            recruitment_policy=nation.recruitment_policy,
-            is_public=nation.is_public,
-            leader_user_id=nation.leader_user_id,
-            assets=NationAssetsRead(
-                icon_url=nation.icon_url,
-                icon_preview_url=nation.icon_preview_url,
-                banner_url=nation.banner_url,
-                banner_preview_url=nation.banner_preview_url,
-                background_url=nation.background_url,
-                background_preview_url=nation.background_preview_url,
-            ),
-            stats=NationStatsRead(members_count=len(nation.members), pending_requests_count=len([i for i in nation.join_requests if i.status == "pending"])),
-            viewer_role=viewer_membership.role if viewer_membership else None,
-            viewer_is_member=viewer_membership is not None,
-            viewer_can_manage=viewer_membership is not None and viewer_membership.role in {"leader", "officer"},
-            viewer_request_status=viewer_request.status if viewer_request is not None else None,
-            members=members,
-            join_requests=join_requests,
-            created_at=nation.created_at,
-            updated_at=nation.updated_at,
-        )
+
+    version = ""
+    if nation.updated_at is not None:
+        version = str(int(nation.updated_at.timestamp()))
+
+    def versioned(url: str | None) -> str | None:
+        if not url:
+            return None
+        if not version:
+            return url
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}v={version}"
+
+    return NationRead(
+        id=nation.id,
+        slug=nation.slug,
+        title=nation.title,
+        tag=nation.tag,
+        short_description=nation.short_description,
+        description=nation.description,
+        accent_color=nation.accent_color,
+        recruitment_policy=nation.recruitment_policy,
+        is_public=nation.is_public,
+        leader_user_id=nation.leader_user_id,
+        assets=NationAssetsRead(
+            icon_url=versioned(nation.icon_url),
+            icon_preview_url=versioned(nation.icon_preview_url),
+            banner_url=versioned(nation.banner_url),
+            banner_preview_url=versioned(nation.banner_preview_url),
+            background_url=versioned(nation.background_url),
+            background_preview_url=versioned(nation.background_preview_url),
+        ),
+        stats=NationStatsRead(
+            members_count=len(nation.members),
+            pending_requests_count=len([i for i in nation.join_requests if i.status == "pending"]),
+        ),
+        viewer_role=viewer_membership.role if viewer_membership else None,
+        viewer_is_member=viewer_membership is not None,
+        viewer_can_manage=viewer_membership is not None and viewer_membership.role in {"leader", "officer"},
+        viewer_request_status=viewer_request.status if viewer_request is not None else None,
+        members=members,
+        join_requests=join_requests,
+        created_at=nation.created_at,
+        updated_at=nation.updated_at,
+    )

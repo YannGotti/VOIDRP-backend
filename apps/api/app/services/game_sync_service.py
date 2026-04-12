@@ -12,10 +12,12 @@ from apps.api.app.models.player_account import PlayerAccount
 from apps.api.app.models.referral_reward_period import ReferralRewardPeriod
 from apps.api.app.models.user import User
 from apps.api.app.schemas.game_sync import (
+    GameNationListResponse,
     GameNationMembershipMemberRead,
     GameNationMembershipSyncRequest,
     GameNationMembershipSyncResponse,
     GameNationSummaryResponse,
+    GameNationSyncItemRead,
     GameReferralRewardRead,
     GameReferralRewardResolveResponse,
 )
@@ -30,6 +32,62 @@ class GameSyncValidationError(Exception):
 class GameSyncService:
     def __init__(self, session: Session) -> None:
         self.session = session
+
+    def list_nations_for_game_sync(self) -> GameNationListResponse:
+        nations = (
+            self.session.execute(
+                select(Nation)
+                .options(
+                    joinedload(Nation.members)
+                    .joinedload(NationMember.user)
+                    .joinedload(User.player_account)
+                )
+                .order_by(Nation.created_at.desc())
+            )
+            .unique()
+            .scalars()
+            .all()
+        )
+
+        items: list[GameNationSyncItemRead] = []
+        for nation in nations:
+            leader_nickname = None
+            officers: list[str] = []
+            members: list[str] = []
+
+            for membership in nation.members or []:
+                user = membership.user
+                account = user.player_account if user is not None else None
+                nickname = account.minecraft_nickname if account is not None else None
+                if not nickname:
+                    continue
+
+                if membership.role == "leader":
+                    leader_nickname = nickname
+                elif membership.role == "officer":
+                    officers.append(nickname)
+                else:
+                    members.append(nickname)
+
+            if leader_nickname is None:
+                leader_user = next((item.user for item in nation.members if item.user_id == nation.leader_user_id), None)
+                if leader_user is not None and leader_user.player_account is not None:
+                    leader_nickname = leader_user.player_account.minecraft_nickname
+
+            items.append(
+                GameNationSyncItemRead(
+                    nation_id=nation.id,
+                    nation_slug=nation.slug,
+                    title=nation.title,
+                    tag=nation.tag,
+                    leader_minecraft_nickname=leader_nickname,
+                    officers=sorted(set(officers)),
+                    members=sorted(set(members)),
+                    updated_at=nation.updated_at,
+                )
+            )
+
+        return GameNationListResponse(total=len(items), items=items)
 
     def get_nation_summary(self, slug: str) -> GameNationSummaryResponse:
         nation = self._get_nation_by_slug(slug)

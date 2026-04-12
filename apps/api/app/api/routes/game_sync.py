@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from apps.api.app.db import get_db_session
 from apps.api.app.dependencies.server_auth import require_game_auth_secret
 from apps.api.app.schemas.game_sync import (
+    GameNationListResponse,
     GameNationMembershipSyncRequest,
     GameNationMembershipSyncResponse,
     GameNationSummaryResponse,
@@ -23,6 +24,17 @@ def get_game_sync_service(
     session: Annotated[Session, Depends(get_db_session)],
 ) -> GameSyncService:
     return GameSyncService(session=session)
+
+
+@router.get(
+    "/nations",
+    response_model=GameNationListResponse,
+    dependencies=[Depends(require_game_auth_secret)],
+)
+def list_game_sync_nations(
+    service: Annotated[GameSyncService, Depends(get_game_sync_service)],
+) -> GameNationListResponse:
+    return service.list_nations_for_game_sync()
 
 
 @router.get(

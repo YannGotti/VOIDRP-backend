@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
-
-NATION_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{2,63}$")
-ACCENT_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
+from pydantic import BaseModel, Field
 
 
 class NationAssetsRead(BaseModel):
@@ -56,8 +52,8 @@ class NationRead(BaseModel):
     assets: NationAssetsRead
     stats: NationStatsRead
     viewer_role: str | None = None
-    viewer_is_member: bool
-    viewer_can_manage: bool
+    viewer_is_member: bool = False
+    viewer_can_manage: bool = False
     viewer_request_status: str | None = None
     members: list[NationMemberRead]
     join_requests: list[NationJoinRequestRead]
@@ -75,91 +71,40 @@ class NationCreateRequest(BaseModel):
     slug: str = Field(min_length=3, max_length=64)
     tag: str = Field(min_length=2, max_length=8)
     short_description: str | None = Field(default=None, max_length=140)
-    description: str | None = Field(default=None, max_length=5000)
-    accent_color: str | None = Field(default="#6d5df6", max_length=7)
-    recruitment_policy: str = Field(default="request", pattern="^(open|request|invite_only)$")
+    description: str | None = None
+    accent_color: str | None = Field(default=None, max_length=7)
+    recruitment_policy: str = Field(default='request')
     is_public: bool = True
-
-    @field_validator("slug")
-    @classmethod
-    def validate_slug(cls, value: str) -> str:
-        value = value.strip().lower()
-        if not NATION_SLUG_PATTERN.fullmatch(value):
-            raise ValueError("nation slug contains invalid characters")
-        return value
-
-    @field_validator("tag")
-    @classmethod
-    def validate_tag(cls, value: str) -> str:
-        value = value.strip().upper()
-        if len(value) < 2 or len(value) > 8:
-            raise ValueError("nation tag must be between 2 and 8 characters")
-        return value
-
-    @field_validator("accent_color")
-    @classmethod
-    def validate_accent_color(cls, value: str | None) -> str | None:
-        if value is None or value == "":
-            return None
-        if not ACCENT_COLOR_PATTERN.fullmatch(value):
-            raise ValueError("accent_color must be in #RRGGBB format")
-        return value
 
 
 class NationUpdateRequest(BaseModel):
-    title: str | None = Field(default=None, min_length=3, max_length=64)
     slug: str | None = Field(default=None, min_length=3, max_length=64)
+    title: str | None = Field(default=None, min_length=3, max_length=64)
     tag: str | None = Field(default=None, min_length=2, max_length=8)
     short_description: str | None = Field(default=None, max_length=140)
-    description: str | None = Field(default=None, max_length=5000)
+    description: str | None = None
     accent_color: str | None = Field(default=None, max_length=7)
-    recruitment_policy: str | None = Field(default=None, pattern="^(open|request|invite_only)$")
+    recruitment_policy: str | None = Field(default=None)
     is_public: bool | None = None
-
-    @field_validator("slug")
-    @classmethod
-    def validate_slug(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip().lower()
-        if not NATION_SLUG_PATTERN.fullmatch(value):
-            raise ValueError("nation slug contains invalid characters")
-        return value
-
-    @field_validator("tag")
-    @classmethod
-    def validate_tag(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip().upper()
-        if len(value) < 2 or len(value) > 8:
-            raise ValueError("nation tag must be between 2 and 8 characters")
-        return value
-
-    @field_validator("accent_color")
-    @classmethod
-    def validate_accent_color(cls, value: str | None) -> str | None:
-        if value is None or value == "":
-            return None
-        if not ACCENT_COLOR_PATTERN.fullmatch(value):
-            raise ValueError("accent_color must be in #RRGGBB format")
-        return value
 
 
 class NationJoinRequestCreate(BaseModel):
-    message: str | None = Field(default=None, max_length=500)
+    message: str | None = Field(default=None, max_length=600)
 
 
 class NationJoinActionResponse(BaseModel):
     message: str
-    nation: NationRead | None
-
-
-class NationDeleteAssetResponse(BaseModel):
-    message: str
     nation: NationRead
 
 
-class NationAssetUploadResponse(BaseModel):
+class NationMemberRoleUpdateRequest(BaseModel):
+    role: str = Field(pattern='^(officer|member)$')
+
+
+class NationTransferLeadershipRequest(BaseModel):
+    target_user_id: UUID
+
+
+class NationActionResponse(BaseModel):
     message: str
     nation: NationRead
