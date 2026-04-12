@@ -12,6 +12,7 @@ from apps.api.app.models.media_asset import MediaAsset
 from apps.api.app.models.nation import Nation
 from apps.api.app.models.nation_join_request import NationJoinRequest
 from apps.api.app.models.nation_member import NationMember
+from apps.api.app.models.nation_stat import NationStat
 from apps.api.app.models.player_account import PlayerAccount
 from apps.api.app.models.player_follow import PlayerFollow
 from apps.api.app.models.player_public_profile import PlayerPublicProfile
