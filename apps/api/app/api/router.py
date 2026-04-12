@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from apps.api.app.api.routes.account import router as account_router
 from apps.api.app.api.routes.admin import router as admin_router
 from apps.api.app.api.routes.auth import router as auth_router
+from apps.api.app.api.routes.game_sync import router as game_sync_router
 from apps.api.app.api.routes.health import router as health_router
 from apps.api.app.api.routes.nations import router as nations_router
 from apps.api.app.api.routes.nation_stats import router as nation_stats_router
@@ -28,3 +29,4 @@ api_router.include_router(social_router)
 api_router.include_router(referrals_router)
 api_router.include_router(nations_router)
 api_router.include_router(nation_stats_router)
+api_router.include_router(game_sync_router)
